@@ -216,7 +216,7 @@ export function MeditationTimer() {
 
     const animate = () => {
       const elapsed = (Date.now() - startTime) / 1000; // seconds
-      const intensity = Math.pow(Math.sin(elapsed * Math.PI * 2) * 0.5 + 0.5, 4); // ~1Hz frequency
+      const intensity = Math.pow(Math.sin(elapsed * Math.PI * 4) * 0.5 + 0.5, 4); // ~1Hz frequency
 
       setFlashIntensity(intensity);
 
