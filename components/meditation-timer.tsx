@@ -14,8 +14,8 @@ interface TimerPreset {
 
 const PRESETS: TimerPreset[] = [
   { label: '5 sec',  seconds: 5 },
-  { label: '15 min', seconds: 15*60 },
   { label: '10 min', seconds: 10*60 },
+  { label: '15 min', seconds: 15*60 },
   { label: '30 min', seconds: 30*60 },
 ];
 
@@ -35,6 +35,8 @@ export function MeditationTimer() {
   );
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [flashCount, setFlashCount] = useState<number>(0);
+  const [flashIntensity, setFlashIntensity] = useState<number>(0);
 
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
@@ -44,12 +46,14 @@ export function MeditationTimer() {
    * Resets timer to selected preset duration
    */
   const handlePresetSelect = useCallback((index: number) => {
-    const newSeconds = PRESETS[index].minutes * 60;
+    const newSeconds = PRESETS[index].seconds;
     setSelectedPreset(index);
     setTotalSeconds(newSeconds);
     setRemainingSeconds(newSeconds);
     setIsRunning(false);
     setIsCompleted(false);
+    setFlashCount(0);
+    setFlashIntensity(0);
   }, []);
 
   /**
@@ -70,6 +74,8 @@ export function MeditationTimer() {
     setRemainingSeconds(totalSeconds);
     setIsRunning(false);
     setIsCompleted(false);
+    setFlashCount(0);
+    setFlashIntensity(0);
   }, [totalSeconds]);
 
   /**
@@ -122,6 +128,44 @@ export function MeditationTimer() {
     };
   }, [isRunning]);
 
+  /**
+   * Flash effect when timer completes
+   * Flashes red background 5 times using sine wave animation
+   */
+  useEffect(() => {
+    if (!isCompleted || flashCount >= 10) return;
+
+    let frameId: number;
+    let startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = (Date.now() - startTime) / 1000; // seconds
+      const intensity = Math.pow(Math.sin(elapsed * Math.PI * 4) * 0.5 + 0.5, 4); // ~1Hz frequency
+
+      setFlashIntensity(intensity);
+
+      if (elapsed < 1) {
+        frameId = requestAnimationFrame(animate);
+      } else {
+        setFlashCount((prev) => prev + 1);
+        startTime = Date.now();
+        if (flashCount < 4) {
+          frameId = requestAnimationFrame(animate);
+        } else {
+          setFlashIntensity(0);
+        }
+      }
+    };
+
+    frameId = requestAnimationFrame(animate);
+
+    return () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+    };
+  }, [isCompleted, flashCount]);
+
   return (
     <div className='flex min-h-screen flex-col items-center justify-center gap-12 bg-black p-4'>
       {/* Preset buttons */}
@@ -145,17 +189,33 @@ export function MeditationTimer() {
       </div>
 
       {/* Timer display */}
-      <div className='flex flex-col items-center gap-6'>
-        <div className='flex items-center justify-center gap-1 text-9xl leading-none text-white' style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}>
-          <SlidingNumber value={minutes} padStart={true} />
-          <span className='text-zinc-600'>:</span>
-          <SlidingNumber value={seconds} padStart={true} />
+      <div className='flex flex-col items-center relative'>
+        <div
+          className='flex items-center justify-center gap-1 text-9xl leading-none relative p-8'
+          style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}
+        >
+          {/* Flash background */}
+          {isCompleted && flashCount < 5 && (
+            <div
+              className='absolute inset-0'
+              style={{
+                backgroundColor: `rgba(239, 68, 68, ${flashIntensity * 0.8})`,
+              }}
+            />
+          )}
+
+          {/* Timer numbers */}
+          <div className={`relative z-10 flex items-center gap-1 ${flashCount >= 5 ? 'text-zinc-600' : 'text-white'}`}>
+            <SlidingNumber value={minutes} padStart={true} />
+            <span className='text-zinc-600'>:</span>
+            <SlidingNumber value={seconds} padStart={true} />
+          </div>
         </div>
 
         {/* Progress bar */}
-        <div className='h-1 w-full overflow-hidden rounded-full' style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
+        <div className='h-1 w-full overflow-hidden' style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
           <div
-            className='h-full rounded-full transition-all duration-1000 ease-linear'
+            className='h-full transition-all duration-1000 ease-linear'
             style={{
               width: `${((totalSeconds - remainingSeconds) / totalSeconds) * 100}%`,
               backgroundColor: (() => {
@@ -193,12 +253,6 @@ export function MeditationTimer() {
         </button>
       </div>
 
-      {/* Completion message */}
-      {isCompleted && (
-        <div className='font-mono text-sm text-white'>
-          complete
-        </div>
-      )}
     </div>
   );
 }
