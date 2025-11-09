@@ -216,7 +216,7 @@ export function MeditationTimer() {
 
     const animate = () => {
       const elapsed = (Date.now() - startTime) / 1000; // seconds
-      const intensity = Math.pow(Math.sin(elapsed * Math.PI * 4) * 0.5 + 0.5, 4); // ~1Hz frequency
+      const intensity = Math.pow(Math.sin(elapsed * Math.PI * 2) * 0.5 + 0.5, 4); // ~1Hz frequency
 
       setFlashIntensity(intensity);
 
@@ -243,9 +243,19 @@ export function MeditationTimer() {
   }, [isCompleted, flashCount]);
 
   return (
-    <div className='flex min-h-screen flex-col items-center justify-center gap-12 bg-black p-4'>
+    <div className='relative flex min-h-screen flex-col items-center justify-center gap-12 bg-black p-4'>
+      {/* Fullscreen flash overlay */}
+      {isCompleted && flashCount < 10 && (
+        <div
+          className='fixed inset-0 pointer-events-none z-50'
+          style={{
+            backgroundColor: `rgba(239, 68, 68, ${flashIntensity * 0.6})`,
+          }}
+        />
+      )}
+
       {/* Preset buttons */}
-      <div className='flex gap-6'>
+      <div className='flex gap-6 relative z-10'>
         {PRESETS.map((preset, index) => (
           <button
             key={preset.label}
@@ -265,23 +275,13 @@ export function MeditationTimer() {
       </div>
 
       {/* Timer display */}
-      <div className='flex flex-col items-center relative'>
+      <div className='flex flex-col items-center relative z-10'>
         <div
           className='flex items-center justify-center gap-1 text-9xl leading-none relative p-8'
           style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}
         >
-          {/* Flash background */}
-          {isCompleted && flashCount < 5 && (
-            <div
-              className='absolute inset-0'
-              style={{
-                backgroundColor: `rgba(239, 68, 68, ${flashIntensity * 0.8})`,
-              }}
-            />
-          )}
-
           {/* Timer numbers */}
-          <div className={`relative z-10 flex items-center gap-1 ${flashCount >= 5 ? 'text-zinc-600' : 'text-white'}`}>
+          <div className={`relative flex items-center gap-1 ${flashCount >= 10 ? 'text-zinc-600' : 'text-white'}`}>
             <SlidingNumber value={minutes} padStart={true} />
             <span className='text-zinc-600'>:</span>
             <SlidingNumber value={seconds} padStart={true} />
@@ -313,7 +313,7 @@ export function MeditationTimer() {
       </div>
 
       {/* Control buttons */}
-      <div className='flex gap-8'>
+      <div className='flex gap-8 relative z-10'>
         <button
           onClick={handleStartPause}
           className='font-mono text-sm text-white transition-opacity hover:opacity-70'
