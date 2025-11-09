@@ -144,7 +144,7 @@ export function MeditationTimer() {
       </div>
 
       {/* Timer display */}
-      <div className='flex items-center justify-center gap-1 font-mono text-9xl font-bold leading-none text-white'>
+      <div className='flex items-center justify-center gap-1 text-9xl leading-none text-white' style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}>
         <SlidingNumber value={minutes} padStart={true} />
         <span className='text-zinc-600'>:</span>
         <SlidingNumber value={seconds} padStart={true} />
