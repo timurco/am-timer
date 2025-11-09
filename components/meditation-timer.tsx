@@ -37,9 +37,47 @@ export function MeditationTimer() {
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [flashCount, setFlashCount] = useState<number>(0);
   const [flashIntensity, setFlashIntensity] = useState<number>(0);
+  const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
 
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
+
+  /**
+   * Load timer state from localStorage on mount
+   */
+  useEffect(() => {
+    const savedState = localStorage.getItem('meditationTimer');
+    if (savedState) {
+      try {
+        const { targetTimestamp, selectedPreset, totalSeconds } = JSON.parse(savedState);
+        const now = Date.now();
+
+        if (targetTimestamp && targetTimestamp > now) {
+          // Timer is still running
+          const remaining = Math.ceil((targetTimestamp - now) / 1000);
+          setSelectedPreset(selectedPreset);
+          setTotalSeconds(totalSeconds);
+          setRemainingSeconds(remaining);
+          setTargetTimestamp(targetTimestamp);
+          setIsRunning(true);
+        } else if (targetTimestamp && targetTimestamp <= now) {
+          // Timer has completed
+          setSelectedPreset(selectedPreset);
+          setTotalSeconds(totalSeconds);
+          setRemainingSeconds(0);
+          setIsCompleted(true);
+          localStorage.removeItem('meditationTimer');
+        } else {
+          // Timer was paused or not running
+          setSelectedPreset(selectedPreset);
+          setTotalSeconds(totalSeconds);
+          setRemainingSeconds(totalSeconds);
+        }
+      } catch (e) {
+        console.error('Failed to load timer state:', e);
+      }
+    }
+  }, []);
 
   /**
    * Handle preset selection
@@ -63,9 +101,30 @@ export function MeditationTimer() {
     if (isCompleted) {
       handleReset();
     } else {
-      setIsRunning((prev) => !prev);
+      setIsRunning((prev) => {
+        const newIsRunning = !prev;
+        if (newIsRunning) {
+          // Starting timer - calculate target timestamp
+          const target = Date.now() + remainingSeconds * 1000;
+          setTargetTimestamp(target);
+          localStorage.setItem('meditationTimer', JSON.stringify({
+            targetTimestamp: target,
+            selectedPreset,
+            totalSeconds
+          }));
+        } else {
+          // Pausing timer - save current state without target
+          setTargetTimestamp(null);
+          localStorage.setItem('meditationTimer', JSON.stringify({
+            targetTimestamp: null,
+            selectedPreset,
+            totalSeconds
+          }));
+        }
+        return newIsRunning;
+      });
     }
-  }, [isCompleted]);
+  }, [isCompleted, remainingSeconds, selectedPreset, totalSeconds]);
 
   /**
    * Reset timer to selected preset duration
@@ -76,28 +135,34 @@ export function MeditationTimer() {
     setIsCompleted(false);
     setFlashCount(0);
     setFlashIntensity(0);
+    setTargetTimestamp(null);
+    localStorage.removeItem('meditationTimer');
   }, [totalSeconds]);
 
   /**
    * Timer countdown effect
-   * Decrements remaining seconds every second when running
+   * Uses targetTimestamp for accurate countdown even after page reload
    */
   useEffect(() => {
-    if (!isRunning || remainingSeconds <= 0) return;
+    if (!isRunning || !targetTimestamp) return;
 
     const interval = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          setIsRunning(false);
-          setIsCompleted(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const now = Date.now();
+      const remaining = Math.ceil((targetTimestamp - now) / 1000);
+
+      if (remaining <= 0) {
+        setRemainingSeconds(0);
+        setIsRunning(false);
+        setIsCompleted(true);
+        setTargetTimestamp(null);
+        localStorage.removeItem('meditationTimer');
+      } else {
+        setRemainingSeconds(remaining);
+      }
+    }, 100); // Update every 100ms for smooth countdown
 
     return () => clearInterval(interval);
-  }, [isRunning, remainingSeconds]);
+  }, [isRunning, targetTimestamp]);
 
   /**
    * Wake Lock effect
