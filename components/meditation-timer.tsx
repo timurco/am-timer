@@ -92,6 +92,35 @@ export function MeditationTimer() {
     return () => clearInterval(interval);
   }, [isRunning, remainingSeconds]);
 
+  /**
+   * Wake Lock effect
+   * Prevents screen from turning off while timer is running
+   */
+  useEffect(() => {
+    let wakeLock: WakeLockSentinel | null = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && isRunning) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        // Wake Lock API not supported or failed
+        console.warn('Wake Lock API not available:', err);
+      }
+    };
+
+    if (isRunning) {
+      requestWakeLock();
+    }
+
+    return () => {
+      if (wakeLock) {
+        wakeLock.release();
+      }
+    };
+  }, [isRunning]);
+
   return (
     <div className='flex min-h-screen flex-col items-center justify-center gap-12 bg-black p-4'>
       {/* Preset buttons */}
