@@ -93,85 +93,57 @@ export function MeditationTimer() {
   }, [isRunning, remainingSeconds]);
 
   return (
-    <div className='flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-4'>
-      <div className='w-full max-w-md space-y-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl'>
-        {/* Title */}
-        <div className='text-center'>
-          <h1 className='text-3xl font-bold text-zinc-50'>
-            Meditation Timer
-          </h1>
-          <p className='mt-2 text-sm text-zinc-400'>
-            Choose a duration and start your practice
-          </p>
-        </div>
-
-        {/* Preset buttons */}
-        <div className='flex gap-3'>
-          {PRESETS.map((preset, index) => (
-            <button
-              key={preset.label}
-              onClick={() => handlePresetSelect(index)}
-              disabled={isRunning}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                selectedPreset === index
-                  ? 'bg-zinc-50 text-zinc-900'
-                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              } ${
-                isRunning ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-              }`}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Timer display */}
-        <div className='flex items-center justify-center gap-1 py-12 font-mono text-8xl font-bold leading-none text-zinc-50'>
-          <SlidingNumber value={minutes} padStart={true} />
-          <span className='text-zinc-500'>:</span>
-          <SlidingNumber value={seconds} padStart={true} />
-        </div>
-
-        {/* Progress bar */}
-        <div className='h-1 overflow-hidden rounded-full bg-zinc-800'>
-          <div
-            className='h-full rounded-full bg-zinc-50 transition-all duration-1000 ease-linear'
-            style={{
-              width: `${((totalSeconds - remainingSeconds) / totalSeconds) * 100}%`,
-            }}
-          />
-        </div>
-
-        {/* Control buttons */}
-        <div className='flex gap-3'>
+    <div className='flex min-h-screen flex-col items-center justify-center gap-12 bg-black p-4'>
+      {/* Preset buttons */}
+      <div className='flex gap-6'>
+        {PRESETS.map((preset, index) => (
           <button
-            onClick={handleStartPause}
-            className={`flex-1 rounded-lg px-6 py-3 font-medium transition-all ${
-              isCompleted
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : isRunning
-                  ? 'bg-orange-600 text-white hover:bg-orange-700'
-                  : 'bg-zinc-50 text-zinc-900 hover:bg-zinc-200'
+            key={preset.label}
+            onClick={() => handlePresetSelect(index)}
+            disabled={isRunning}
+            className={`font-mono text-sm transition-opacity ${
+              selectedPreset === index
+                ? 'text-white'
+                : 'text-zinc-600 hover:text-zinc-400'
+            } ${
+              isRunning ? 'cursor-not-allowed opacity-30' : 'cursor-pointer'
             }`}
           >
-            {isCompleted ? 'Restart' : isRunning ? 'Pause' : 'Start'}
+            {preset.label}
           </button>
-          <button
-            onClick={handleReset}
-            disabled={!isRunning && !isCompleted && remainingSeconds === totalSeconds}
-            className='rounded-lg bg-zinc-800 px-6 py-3 font-medium text-zinc-300 transition-all hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50'
-          >
-            Reset
-          </button>
-        </div>
-
-        {/* Completion message */}
-        {isCompleted && (
-          <div className='text-center text-lg font-semibold text-emerald-400'>
-            Session complete! 🧘‍♀️
-          </div>
-        )}
+        ))}
       </div>
+
+      {/* Timer display */}
+      <div className='flex items-center justify-center gap-1 font-mono text-9xl font-bold leading-none text-white'>
+        <SlidingNumber value={minutes} padStart={true} />
+        <span className='text-zinc-600'>:</span>
+        <SlidingNumber value={seconds} padStart={true} />
+      </div>
+
+      {/* Control buttons */}
+      <div className='flex gap-8'>
+        <button
+          onClick={handleStartPause}
+          className='font-mono text-sm text-white transition-opacity hover:opacity-70'
+        >
+          {isCompleted ? 'restart' : isRunning ? 'pause' : 'start'}
+        </button>
+        <button
+          onClick={handleReset}
+          disabled={!isRunning && !isCompleted && remainingSeconds === totalSeconds}
+          className='font-mono text-sm text-zinc-600 transition-opacity hover:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-30'
+        >
+          reset
+        </button>
+      </div>
+
+      {/* Completion message */}
+      {isCompleted && (
+        <div className='font-mono text-sm text-white'>
+          complete
+        </div>
+      )}
     </div>
   );
 }
