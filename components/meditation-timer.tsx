@@ -167,6 +167,7 @@ export function MeditationTimer() {
   /**
    * Wake Lock effect
    * Prevents screen from turning off while timer is running
+   * Re-acquires lock when page becomes visible again
    */
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
@@ -175,20 +176,30 @@ export function MeditationTimer() {
       try {
         if ('wakeLock' in navigator && isRunning) {
           wakeLock = await navigator.wakeLock.request('screen');
+          console.log('Wake Lock acquired');
         }
       } catch (err) {
-        // Wake Lock API not supported or failed
-        console.warn('Wake Lock API not available:', err);
+        console.warn('Wake Lock API error:', err);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (wakeLock !== null && document.visibilityState === 'visible' && isRunning) {
+        requestWakeLock();
       }
     };
 
     if (isRunning) {
       requestWakeLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (wakeLock) {
-        wakeLock.release();
+        wakeLock.release().then(() => {
+          console.log('Wake Lock released');
+        });
       }
     };
   }, [isRunning]);
