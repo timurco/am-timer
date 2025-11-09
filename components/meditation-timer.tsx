@@ -9,13 +9,14 @@ import { useEffect, useState, useCallback } from 'react';
  */
 interface TimerPreset {
   label: string;
-  minutes: number;
+  seconds: number;
 }
 
 const PRESETS: TimerPreset[] = [
-  { label: '2 min', minutes: 2 },
-  { label: '10 min', minutes: 10 },
-  { label: '30 min', minutes: 30 },
+  { label: '5 sec',  seconds: 5 },
+  { label: '15 min', seconds: 15*60 },
+  { label: '10 min', seconds: 10*60 },
+  { label: '30 min', seconds: 30*60 },
 ];
 
 /**
@@ -27,10 +28,10 @@ const PRESETS: TimerPreset[] = [
 export function MeditationTimer() {
   const [selectedPreset, setSelectedPreset] = useState<number>(0);
   const [totalSeconds, setTotalSeconds] = useState<number>(
-    PRESETS[0].minutes * 60
+    PRESETS[0].seconds
   );
   const [remainingSeconds, setRemainingSeconds] = useState<number>(
-    PRESETS[0].minutes * 60
+    PRESETS[0].seconds
   );
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
@@ -144,10 +145,35 @@ export function MeditationTimer() {
       </div>
 
       {/* Timer display */}
-      <div className='flex items-center justify-center gap-1 text-9xl leading-none text-white' style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}>
-        <SlidingNumber value={minutes} padStart={true} />
-        <span className='text-zinc-600'>:</span>
-        <SlidingNumber value={seconds} padStart={true} />
+      <div className='flex flex-col items-center gap-6'>
+        <div className='flex items-center justify-center gap-1 text-9xl leading-none text-white' style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}>
+          <SlidingNumber value={minutes} padStart={true} />
+          <span className='text-zinc-600'>:</span>
+          <SlidingNumber value={seconds} padStart={true} />
+        </div>
+
+        {/* Progress bar */}
+        <div className='h-1 w-full overflow-hidden rounded-full' style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
+          <div
+            className='h-full rounded-full transition-all duration-1000 ease-linear'
+            style={{
+              width: `${((totalSeconds - remainingSeconds) / totalSeconds) * 100}%`,
+              backgroundColor: (() => {
+                const progress = (totalSeconds - remainingSeconds) / totalSeconds;
+                if (progress < 0.5) {
+                  return '#22c55e'; // Green
+                } else {
+                  // Interpolate between green and orange
+                  const t = (progress - 0.5) * 2; // 0 to 1
+                  const r = Math.round(34 + (249 - 34) * t);
+                  const g = Math.round(197 + (115 - 197) * t);
+                  const b = Math.round(94 + (22 - 94) * t);
+                  return `rgb(${r}, ${g}, ${b})`;
+                }
+              })()
+            }}
+          />
+        </div>
       </div>
 
       {/* Control buttons */}
