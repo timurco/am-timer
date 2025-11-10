@@ -3,6 +3,7 @@
 import { SlidingNumber } from '@/components/core/sliding-number';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import NoSleep from 'nosleep.js';
+import { Volume2, VolumeX } from 'lucide-react';
 
 /**
  * Timer mode type
@@ -54,6 +55,10 @@ export function MeditationTimer() {
   const noSleepRef = useRef<NoSleep | null>(null);
   const [noSleepEnabled, setNoSleepEnabled] = useState<boolean>(false);
 
+  // Sound notification state
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   // Clock mode state
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isMounted, setIsMounted] = useState(false);
@@ -61,6 +66,11 @@ export function MeditationTimer() {
   // Prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true);
+    // Initialize audio on mount
+    if (typeof window !== 'undefined') {
+      audioRef.current = new Audio('/bowl.mp3');
+      audioRef.current.preload = 'auto';
+    }
   }, []);
 
   // Display values based on mode
@@ -72,6 +82,25 @@ export function MeditationTimer() {
   const displaySeconds = mode === 'clock'
     ? (isMounted ? currentTime.getSeconds() : 0)
     : remainingSeconds % 60;
+
+  /**
+   * Toggle sound notification
+   */
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => !prev);
+  }, []);
+
+  /**
+   * Play notification sound
+   */
+  const playNotificationSound = useCallback(() => {
+    if (soundEnabled && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch((err) => {
+        console.warn('Failed to play notification sound:', err);
+      });
+    }
+  }, [soundEnabled]);
 
   /**
    * Enable NoSleep on user interaction (only once)
@@ -250,13 +279,14 @@ export function MeditationTimer() {
         setIsCompleted(true);
         setTargetTimestamp(null);
         localStorage.removeItem('meditationTimer');
+        playNotificationSound();
       } else {
         setRemainingSeconds(remaining);
       }
     }, 100); // Update every 100ms for smooth countdown
 
     return () => clearInterval(interval);
-  }, [isRunning, targetTimestamp]);
+  }, [isRunning, targetTimestamp, playNotificationSound]);
 
   /**
    * Cleanup NoSleep on unmount
@@ -518,6 +548,17 @@ export function MeditationTimer() {
             className='font-mono text-sm text-zinc-600 transition-opacity hover:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-30'
           >
             reset
+          </button>
+          <button
+            onClick={toggleSound}
+            className={`transition-colors ${
+              soundEnabled
+                ? 'text-white hover:opacity-70'
+                : 'text-zinc-600 hover:text-zinc-400'
+            }`}
+            aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
+          >
+            {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
           </button>
         </div>
       )}
