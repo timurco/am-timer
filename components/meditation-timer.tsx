@@ -58,6 +58,7 @@ export function MeditationTimer() {
   // Sound notification state
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
   // Clock mode state
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -70,6 +71,11 @@ export function MeditationTimer() {
     if (typeof window !== 'undefined') {
       audioRef.current = new Audio('/bowl.mp3');
       audioRef.current.preload = 'auto';
+
+      // Check notification permission
+      if ('Notification' in window) {
+        setNotificationPermission(Notification.permission);
+      }
     }
   }, []);
 
@@ -84,21 +90,94 @@ export function MeditationTimer() {
     : remainingSeconds % 60;
 
   /**
-   * Toggle sound notification
+   * Request notification permission
    */
-  const toggleSound = useCallback(() => {
-    setSoundEnabled((prev) => !prev);
+  const requestNotificationPermission = useCallback(async () => {
+    if (!('Notification' in window)) {
+      console.warn('Notifications not supported in this browser');
+      return;
+    }
+
+    console.log('Notification permission:', Notification.permission);
+    console.log('Secure context:', window.isSecureContext);
+    console.log('Hostname:', window.location.hostname);
+
+    if (Notification.permission === 'default') {
+      try {
+        const permission = await Notification.requestPermission();
+        console.log('Permission result:', permission);
+        setNotificationPermission(permission);
+      } catch (err) {
+        console.error('Failed to request notification permission:', err);
+      }
+    }
   }, []);
 
   /**
-   * Play notification sound
+   * Toggle sound notification
+   */
+  const toggleSound = useCallback(async () => {
+    const newSoundEnabled = !soundEnabled;
+    console.log('Toggling sound:', { newSoundEnabled, notificationPermission });
+    setSoundEnabled(newSoundEnabled);
+
+    // Request notification permission when enabling sound
+    if (newSoundEnabled) {
+      console.log('Sound enabled, requesting notification permission...');
+      await requestNotificationPermission();
+    }
+  }, [soundEnabled, requestNotificationPermission]);
+
+  /**
+   * Play notification sound and show browser notification
    */
   const playNotificationSound = useCallback(() => {
-    if (soundEnabled && audioRef.current) {
+    console.log('playNotificationSound called, soundEnabled:', soundEnabled);
+
+    if (!soundEnabled) {
+      console.log('Sound disabled, skipping notification');
+      return;
+    }
+
+    // Play audio
+    if (audioRef.current) {
+      console.log('Playing audio...');
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch((err) => {
         console.warn('Failed to play notification sound:', err);
       });
+    }
+
+    // Show browser notification
+    console.log('Notification available:', 'Notification' in window);
+    console.log('Notification permission:', Notification?.permission);
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        console.log('Creating notification...');
+        const notification = new Notification('Meditation Timer Complete', {
+          body: 'Your meditation session has ended.',
+          icon: '/icon.svg',
+          tag: 'meditation-timer',
+          requireInteraction: true, // Keep notification visible until user dismisses
+          silent: false,
+        });
+
+        console.log('Notification created:', notification);
+
+        // Close notification after 10 seconds
+        setTimeout(() => notification.close(), 10000);
+      } catch (err) {
+        console.error('Failed to show notification:', err);
+      }
+    } else {
+      console.warn('Notifications not available or not granted');
+    }
+
+    // Vibrate on mobile devices
+    if ('vibrate' in navigator) {
+      console.log('Triggering vibration...');
+      navigator.vibrate([200, 100, 200, 100, 200]);
     }
   }, [soundEnabled]);
 
