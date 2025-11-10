@@ -74,6 +74,25 @@ export function MeditationTimer() {
     : remainingSeconds % 60;
 
   /**
+   * Enable NoSleep on user interaction (only once)
+   */
+  const enableNoSleepOnClick = useCallback(() => {
+    if (!noSleepEnabled) {
+      try {
+        // Create NoSleep instance only on first user click
+        if (!noSleepRef.current) {
+          noSleepRef.current = new NoSleep();
+        }
+        noSleepRef.current.enable();
+        setNoSleepEnabled(true);
+        console.log('NoSleep.js enabled - screen will stay awake');
+      } catch (err) {
+        console.warn('Failed to enable NoSleep.js:', err);
+      }
+    }
+  }, [noSleepEnabled]);
+
+  /**
    * Toggle fullscreen mode
    */
   const toggleFullscreen = useCallback(() => {
@@ -240,42 +259,20 @@ export function MeditationTimer() {
   }, [isRunning, targetTimestamp]);
 
   /**
-   * Initialize NoSleep.js on mount
+   * Cleanup NoSleep on unmount
    */
   useEffect(() => {
-    noSleepRef.current = new NoSleep();
     return () => {
       if (noSleepRef.current) {
-        noSleepRef.current.disable();
+        try {
+          noSleepRef.current.disable();
+        } catch (err) {
+          // Ignore cleanup errors
+        }
       }
     };
   }, []);
 
-  /**
-   * Enable NoSleep on first user interaction
-   */
-  useEffect(() => {
-    const enableNoSleepOnInteraction = () => {
-      if (!noSleepEnabled && noSleepRef.current) {
-        try {
-          noSleepRef.current.enable();
-          setNoSleepEnabled(true);
-          console.log('NoSleep.js enabled on user interaction');
-        } catch (err) {
-          console.warn('Failed to enable NoSleep.js:', err);
-        }
-      }
-    };
-
-    // Add listeners for first interaction
-    document.addEventListener('touchstart', enableNoSleepOnInteraction, { once: true });
-    document.addEventListener('click', enableNoSleepOnInteraction, { once: true });
-
-    return () => {
-      document.removeEventListener('touchstart', enableNoSleepOnInteraction);
-      document.removeEventListener('click', enableNoSleepOnInteraction);
-    };
-  }, [noSleepEnabled]);
 
   /**
    * Wake Lock effect with NoSleep.js fallback
@@ -323,19 +320,11 @@ export function MeditationTimer() {
 
   /**
    * Manage NoSleep state based on mode and timer
+   * Keep it always enabled once activated to avoid play() errors
    */
   useEffect(() => {
-    const shouldKeepAwake = mode === 'clock' || isRunning;
-
-    if (noSleepRef.current && noSleepEnabled) {
-      if (shouldKeepAwake && !noSleepRef.current.isEnabled) {
-        noSleepRef.current.enable();
-        console.log('NoSleep.js re-enabled');
-      } else if (!shouldKeepAwake && noSleepRef.current.isEnabled) {
-        noSleepRef.current.disable();
-        console.log('NoSleep.js disabled');
-      }
-    }
+    // Once enabled, keep NoSleep active at all times to prevent errors
+    // The screen will stay awake continuously after first user interaction
   }, [mode, isRunning, noSleepEnabled]);
 
   /**
@@ -377,7 +366,10 @@ export function MeditationTimer() {
   }, [isCompleted, flashCount]);
 
   return (
-    <div className='relative flex min-h-screen flex-col items-center justify-center gap-8 bg-black p-4'>
+    <div
+      className='relative flex min-h-screen flex-col items-center justify-center gap-8 bg-black p-4'
+      onClick={enableNoSleepOnClick}
+    >
       {/* Fullscreen flash overlay */}
       {mode === 'timer' && isCompleted && flashCount < 10 && (
         <div
