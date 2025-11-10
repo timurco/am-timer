@@ -1,7 +1,8 @@
 'use client';
 
 import { SlidingNumber } from '@/components/core/sliding-number';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import NoSleep from 'nosleep.js';
 
 /**
  * Timer preset configuration
@@ -39,6 +40,7 @@ export function MeditationTimer() {
   const [flashIntensity, setFlashIntensity] = useState<number>(0);
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const noSleepRef = useRef<NoSleep | null>(null);
 
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
@@ -197,21 +199,41 @@ export function MeditationTimer() {
   }, [isRunning, targetTimestamp]);
 
   /**
-   * Wake Lock effect
+   * Initialize NoSleep.js on mount
+   */
+  useEffect(() => {
+    noSleepRef.current = new NoSleep();
+    return () => {
+      if (noSleepRef.current) {
+        noSleepRef.current.disable();
+      }
+    };
+  }, []);
+
+  /**
+   * Wake Lock effect with NoSleep.js fallback
    * Prevents screen from turning off while timer is running
    * Re-acquires lock when page becomes visible again
    */
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
+    let useNoSleep = false;
 
     const requestWakeLock = async () => {
       try {
-        if ('wakeLock' in navigator && isRunning) {
+        if ('wakeLock' in navigator && 'request' in navigator.wakeLock) {
           wakeLock = await navigator.wakeLock.request('screen');
-          console.log('Wake Lock acquired');
+          console.log('Wake Lock API acquired');
+        } else {
+          throw new Error('Wake Lock API not supported');
         }
       } catch (err) {
-        console.warn('Wake Lock API error:', err);
+        console.warn('Wake Lock API failed, using NoSleep.js fallback:', err);
+        useNoSleep = true;
+        if (noSleepRef.current) {
+          noSleepRef.current.enable();
+          console.log('NoSleep.js enabled');
+        }
       }
     };
 
@@ -230,8 +252,12 @@ export function MeditationTimer() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (wakeLock) {
         wakeLock.release().then(() => {
-          console.log('Wake Lock released');
+          console.log('Wake Lock API released');
         });
+      }
+      if (useNoSleep && noSleepRef.current) {
+        noSleepRef.current.disable();
+        console.log('NoSleep.js disabled');
       }
     };
   }, [isRunning]);
