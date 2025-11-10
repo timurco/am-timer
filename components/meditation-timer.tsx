@@ -462,9 +462,13 @@ export function MeditationTimer() {
       )}
 
       {/* Timer display */}
-      <div className='flex flex-col items-center relative z-10 w-full'>
+      <div className={`flex flex-col items-center relative z-10 ${mode === 'clock' ? 'w-full' : ''}`}>
         <div
-          className='flex items-center justify-center gap-1 text-6xl sm:text-8xl md:text-9xl lg:text-[12rem] xl:text-[16rem] leading-none relative p-4 sm:p-8'
+          className={`flex items-center justify-center gap-1 leading-none relative p-4 sm:p-8 ${
+            mode === 'clock'
+              ? 'text-7xl sm:text-8xl md:text-9xl lg:text-[12rem] xl:text-[16rem]'
+              : 'text-8xl'
+          }`}
           style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}
         >
           {/* Timer numbers */}
