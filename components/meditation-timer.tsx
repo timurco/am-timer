@@ -5,6 +5,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import NoSleep from 'nosleep.js';
 
 /**
+ * Timer mode type
+ */
+type TimerMode = 'clock' | 'timer' | 'mode3';
+
+/**
  * Timer preset configuration
  * @interface TimerPreset
  */
@@ -20,6 +25,11 @@ const PRESETS: TimerPreset[] = [
   { label: '30 min', seconds: 30*60 },
 ];
 
+const MODES: { value: TimerMode; label: string }[] = [
+  { value: 'clock', label: 'Clock' },
+  { value: 'timer', label: 'Timer' },
+];
+
 /**
  * Meditation timer component with preset durations and countdown functionality
  * Features animated number display using SlidingNumber component
@@ -27,6 +37,7 @@ const PRESETS: TimerPreset[] = [
  * @returns {JSX.Element} Meditation timer interface
  */
 export function MeditationTimer() {
+  const [mode, setMode] = useState<TimerMode>('clock');
   const [selectedPreset, setSelectedPreset] = useState<number>(0);
   const [totalSeconds, setTotalSeconds] = useState<number>(
     PRESETS[0].seconds
@@ -41,9 +52,26 @@ export function MeditationTimer() {
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const noSleepRef = useRef<NoSleep | null>(null);
+  const [noSleepEnabled, setNoSleepEnabled] = useState<boolean>(false);
 
-  const minutes = Math.floor(remainingSeconds / 60);
-  const seconds = remainingSeconds % 60;
+  // Clock mode state
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Display values based on mode
+  // Use 0 for initial server render to prevent hydration mismatch
+  const displayHours = mode === 'clock' ? (isMounted ? currentTime.getHours() : 0) : null;
+  const displayMinutes = mode === 'clock'
+    ? (isMounted ? currentTime.getMinutes() : 0)
+    : Math.floor(remainingSeconds / 60);
+  const displaySeconds = mode === 'clock'
+    ? (isMounted ? currentTime.getSeconds() : 0)
+    : remainingSeconds % 60;
 
   /**
    * Toggle fullscreen mode
@@ -75,6 +103,19 @@ export function MeditationTimer() {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  /**
+   * Clock mode - update current time every second
+   */
+  useEffect(() => {
+    if (mode !== 'clock') return;
+
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [mode]);
 
   /**
    * Load timer state from localStorage on mount
@@ -211,13 +252,39 @@ export function MeditationTimer() {
   }, []);
 
   /**
+   * Enable NoSleep on first user interaction
+   */
+  useEffect(() => {
+    const enableNoSleepOnInteraction = () => {
+      if (!noSleepEnabled && noSleepRef.current) {
+        try {
+          noSleepRef.current.enable();
+          setNoSleepEnabled(true);
+          console.log('NoSleep.js enabled on user interaction');
+        } catch (err) {
+          console.warn('Failed to enable NoSleep.js:', err);
+        }
+      }
+    };
+
+    // Add listeners for first interaction
+    document.addEventListener('touchstart', enableNoSleepOnInteraction, { once: true });
+    document.addEventListener('click', enableNoSleepOnInteraction, { once: true });
+
+    return () => {
+      document.removeEventListener('touchstart', enableNoSleepOnInteraction);
+      document.removeEventListener('click', enableNoSleepOnInteraction);
+    };
+  }, [noSleepEnabled]);
+
+  /**
    * Wake Lock effect with NoSleep.js fallback
-   * Prevents screen from turning off while timer is running
+   * Prevents screen from turning off while timer is running or in clock mode
    * Re-acquires lock when page becomes visible again
    */
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
-    let useNoSleep = false;
+    const shouldKeepAwake = mode === 'clock' || isRunning;
 
     const requestWakeLock = async () => {
       try {
@@ -228,22 +295,18 @@ export function MeditationTimer() {
           throw new Error('Wake Lock API not supported');
         }
       } catch (err) {
-        console.warn('Wake Lock API failed, using NoSleep.js fallback:', err);
-        useNoSleep = true;
-        if (noSleepRef.current) {
-          noSleepRef.current.enable();
-          console.log('NoSleep.js enabled');
-        }
+        console.warn('Wake Lock API not available, using NoSleep.js:', err);
+        // NoSleep.js will be enabled on first user interaction
       }
     };
 
     const handleVisibilityChange = () => {
-      if (wakeLock !== null && document.visibilityState === 'visible' && isRunning) {
+      if (wakeLock !== null && document.visibilityState === 'visible' && shouldKeepAwake) {
         requestWakeLock();
       }
     };
 
-    if (isRunning) {
+    if (shouldKeepAwake) {
       requestWakeLock();
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
@@ -255,12 +318,25 @@ export function MeditationTimer() {
           console.log('Wake Lock API released');
         });
       }
-      if (useNoSleep && noSleepRef.current) {
+    };
+  }, [mode, isRunning]);
+
+  /**
+   * Manage NoSleep state based on mode and timer
+   */
+  useEffect(() => {
+    const shouldKeepAwake = mode === 'clock' || isRunning;
+
+    if (noSleepRef.current && noSleepEnabled) {
+      if (shouldKeepAwake && !noSleepRef.current.isEnabled) {
+        noSleepRef.current.enable();
+        console.log('NoSleep.js re-enabled');
+      } else if (!shouldKeepAwake && noSleepRef.current.isEnabled) {
         noSleepRef.current.disable();
         console.log('NoSleep.js disabled');
       }
-    };
-  }, [isRunning]);
+    }
+  }, [mode, isRunning, noSleepEnabled]);
 
   /**
    * Flash effect when timer completes
@@ -301,9 +377,9 @@ export function MeditationTimer() {
   }, [isCompleted, flashCount]);
 
   return (
-    <div className='relative flex min-h-screen flex-col items-center justify-center gap-12 bg-black p-4'>
+    <div className='relative flex min-h-screen flex-col items-center justify-center gap-8 bg-black p-4'>
       {/* Fullscreen flash overlay */}
-      {isCompleted && flashCount < 10 && (
+      {mode === 'timer' && isCompleted && flashCount < 10 && (
         <div
           className='fixed inset-0 pointer-events-none z-50'
           style={{
@@ -346,8 +422,26 @@ export function MeditationTimer() {
         </svg>
       </button>
 
-      {/* Preset buttons */}
+      {/* Mode selector */}
       <div className='flex gap-6 relative z-10'>
+        {MODES.map((modeOption) => (
+          <button
+            key={modeOption.value}
+            onClick={() => setMode(modeOption.value)}
+            className={`font-mono text-sm transition-opacity ${
+              mode === modeOption.value
+                ? 'text-white'
+                : 'text-zinc-600 hover:text-zinc-400'
+            } cursor-pointer`}
+          >
+            {modeOption.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Preset buttons - only show for timer mode */}
+      {mode === 'timer' && (
+        <div className='flex gap-6 relative z-10'>
         {PRESETS.map((preset, index) => (
           <button
             key={preset.label}
@@ -364,62 +458,73 @@ export function MeditationTimer() {
             {preset.label}
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Timer display */}
-      <div className='flex flex-col items-center relative z-10'>
+      <div className='flex flex-col items-center relative z-10 w-full'>
         <div
-          className='flex items-center justify-center gap-1 text-9xl leading-none relative p-8'
+          className='flex items-center justify-center gap-1 text-6xl sm:text-8xl md:text-9xl lg:text-[12rem] xl:text-[16rem] leading-none relative p-4 sm:p-8'
           style={{ fontFamily: 'var(--font-manrope)', fontWeight: 200 }}
         >
           {/* Timer numbers */}
           <div className={`relative flex items-center gap-1 ${flashCount >= 10 ? 'text-zinc-600' : 'text-white'}`}>
-            <SlidingNumber value={minutes} padStart={true} />
+            {mode === 'clock' && displayHours !== null && (
+              <>
+                <SlidingNumber value={displayHours} padStart={true} />
+                <span className='text-zinc-600'>:</span>
+              </>
+            )}
+            <SlidingNumber value={displayMinutes} padStart={true} />
             <span className='text-zinc-600'>:</span>
-            <SlidingNumber value={seconds} padStart={true} />
+            <SlidingNumber value={displaySeconds} padStart={true} />
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className='h-1 w-full overflow-hidden' style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
-          <div
-            className='h-full transition-all duration-1000 ease-linear'
-            style={{
-              width: `${((totalSeconds - remainingSeconds) / totalSeconds) * 100}%`,
-              backgroundColor: (() => {
-                const progress = (totalSeconds - remainingSeconds) / totalSeconds;
-                if (progress < 0.5) {
-                  return '#22c55e'; // Green
-                } else {
-                  // Interpolate between green and orange
-                  const t = (progress - 0.5) * 2; // 0 to 1
-                  const r = Math.round(34 + (249 - 34) * t);
-                  const g = Math.round(197 + (115 - 197) * t);
-                  const b = Math.round(94 + (22 - 94) * t);
-                  return `rgb(${r}, ${g}, ${b})`;
-                }
-              })()
-            }}
-          />
-        </div>
+        {/* Progress bar - only show for timer mode */}
+        {mode === 'timer' && (
+          <div className='h-1 w-full overflow-hidden' style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
+            <div
+              className='h-full transition-all duration-1000 ease-linear'
+              style={{
+                width: `${((totalSeconds - remainingSeconds) / totalSeconds) * 100}%`,
+                backgroundColor: (() => {
+                  const progress = (totalSeconds - remainingSeconds) / totalSeconds;
+                  if (progress < 0.5) {
+                    return '#22c55e'; // Green
+                  } else {
+                    // Interpolate between green and orange
+                    const t = (progress - 0.5) * 2; // 0 to 1
+                    const r = Math.round(34 + (249 - 34) * t);
+                    const g = Math.round(197 + (115 - 197) * t);
+                    const b = Math.round(94 + (22 - 94) * t);
+                    return `rgb(${r}, ${g}, ${b})`;
+                  }
+                })()
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Control buttons */}
-      <div className='flex gap-8 relative z-10'>
-        <button
-          onClick={handleStartPause}
-          className='font-mono text-sm text-white transition-opacity hover:opacity-70'
-        >
-          {isCompleted ? 'restart' : isRunning ? 'pause' : 'start'}
-        </button>
-        <button
-          onClick={handleReset}
-          disabled={!isRunning && !isCompleted && remainingSeconds === totalSeconds}
-          className='font-mono text-sm text-zinc-600 transition-opacity hover:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-30'
-        >
-          reset
-        </button>
-      </div>
+      {/* Control buttons - only show for timer mode */}
+      {mode === 'timer' && (
+        <div className='flex gap-8 relative z-10'>
+          <button
+            onClick={handleStartPause}
+            className='font-mono text-sm text-white transition-opacity hover:opacity-70'
+          >
+            {isCompleted ? 'restart' : isRunning ? 'pause' : 'start'}
+          </button>
+          <button
+            onClick={handleReset}
+            disabled={!isRunning && !isCompleted && remainingSeconds === totalSeconds}
+            className='font-mono text-sm text-zinc-600 transition-opacity hover:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-30'
+          >
+            reset
+          </button>
+        </div>
+      )}
 
     </div>
   );
