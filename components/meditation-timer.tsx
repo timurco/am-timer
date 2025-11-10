@@ -59,6 +59,7 @@ export function MeditationTimer() {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [notificationSupported, setNotificationSupported] = useState<boolean>(true);
 
   // Clock mode state
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -75,6 +76,10 @@ export function MeditationTimer() {
       // Check notification permission
       if ('Notification' in window) {
         setNotificationPermission(Notification.permission);
+        setNotificationSupported(true);
+      } else {
+        setNotificationSupported(false);
+        console.warn('Notifications API not supported on this device');
       }
     }
   }, []);
@@ -119,14 +124,30 @@ export function MeditationTimer() {
   const toggleSound = useCallback(async () => {
     const newSoundEnabled = !soundEnabled;
     console.log('Toggling sound:', { newSoundEnabled, notificationPermission });
-    setSoundEnabled(newSoundEnabled);
 
-    // Request notification permission when enabling sound
-    if (newSoundEnabled) {
+    // Request notification permission BEFORE toggling state (important for mobile)
+    if (newSoundEnabled && 'Notification' in window && Notification.permission === 'default') {
       console.log('Sound enabled, requesting notification permission...');
-      await requestNotificationPermission();
+      try {
+        // Request permission immediately in the click handler context
+        const permission = await Notification.requestPermission();
+        console.log('Permission result:', permission);
+        setNotificationPermission(permission);
+
+        // Only enable sound if permission granted
+        if (permission === 'granted') {
+          setSoundEnabled(true);
+        } else {
+          console.warn('Notification permission denied');
+        }
+      } catch (err) {
+        console.error('Failed to request notification permission:', err);
+      }
+    } else {
+      // Just toggle if permission already granted or disabling
+      setSoundEnabled(newSoundEnabled);
     }
-  }, [soundEnabled, requestNotificationPermission]);
+  }, [soundEnabled, notificationPermission]);
 
   /**
    * Play notification sound and show browser notification
