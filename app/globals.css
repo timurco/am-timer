@@ -1,1 +1,79 @@
 @import "tailwindcss";
+
+html,
+body {
+  background-color: #000;
+}
+
+/*
+ * Fullscreen on touch devices opens in landscape, like YouTube video.
+ *
+ * Android locks the screen itself (screen.orientation.lock in
+ * meditation-timer.tsx). iOS has no lock, so there the component sets
+ * data-rotate="landscape" and, while the viewport is portrait, the whole app
+ * is rotated 90deg clockwise: turn the phone counter-clockwise (top edge to
+ * the left) and it reads upright. Once the viewport itself is landscape the
+ * media query stops matching.
+ *
+ * --lw / --lh are the width and height of the landscape frame, so digit sizes
+ * are the same for the rotated and the native landscape layout.
+ * Rules are unlayered on purpose: they override Tailwind utilities.
+ */
+@media (orientation: portrait) {
+  .timer-root[data-rotate="landscape"] {
+    --lw: 100dvh;
+    --lh: 100vw;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--lw);
+    height: var(--lh);
+    min-height: 0;
+    overflow: hidden;
+    transform-origin: top left;
+    transform: translateX(100vw) rotate(90deg);
+    gap: 1rem;
+    /* Device top (notch) is on the left of the rotated frame, bottom on the right */
+    padding-left: max(1rem, env(safe-area-inset-top));
+    padding-right: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .timer-root[data-rotate="landscape"] .timer-digits {
+    padding: 0.25rem 1rem;
+  }
+
+  .timer-root[data-rotate="landscape"] .timer-digits[data-mode="clock"] {
+    font-size: min(calc(var(--lw) * 0.19), calc(var(--lh) * 0.55));
+  }
+
+  .timer-root[data-rotate="landscape"] .timer-digits[data-mode="timer"] {
+    font-size: max(3rem, min(calc(var(--lw) * 0.28), calc(var(--lh) - 11rem)));
+  }
+}
+
+/* Phone held or locked in landscape: same frame sizing without rotation */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
+  .timer-root {
+    --lw: 100vw;
+    --lh: 100dvh;
+    gap: 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .timer-corner {
+    right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .timer-digits {
+    padding: 0.25rem 1rem;
+  }
+
+  .timer-digits[data-mode="clock"] {
+    font-size: min(calc(var(--lw) * 0.19), calc(var(--lh) * 0.55));
+  }
+
+  .timer-digits[data-mode="timer"] {
+    font-size: max(3rem, min(calc(var(--lw) * 0.28), calc(var(--lh) - 11rem)));
+  }
+}

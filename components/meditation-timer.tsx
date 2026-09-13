@@ -3,7 +3,7 @@
 import { SlidingNumber } from '@/components/core/sliding-number';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import NoSleep from 'nosleep.js';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Smartphone, Volume2, VolumeX } from 'lucide-react';
 
 /**
  * Timer mode type
@@ -31,6 +31,37 @@ const MODES: { value: TimerMode; label: string }[] = [
   { value: 'timer', label: 'Timer' },
 ];
 
+type Orientation = 'landscape' | 'portrait';
+
+/**
+ * 'native' - Fullscreen API; 'emulated' - touch device without the API
+ * (iPhone Safari), where only the layout switches to fullscreen orientation
+ */
+type FullscreenMode = 'off' | 'native' | 'emulated';
+
+/**
+ * Lock screen orientation through the Screen Orientation API.
+ * Browsers allow it only in fullscreen on devices that rotate (Android);
+ * iOS has no lock, there globals.css rotates the layout instead.
+ * `lock` is missing from TypeScript's DOM typings, hence the local type.
+ *
+ * @returns {Promise<boolean>} Whether the browser locked the screen itself
+ */
+async function lockOrientation(type: Orientation): Promise<boolean> {
+  const orientation = screen.orientation as
+    | (ScreenOrientation & { lock?: (type: Orientation) => Promise<void> })
+    | undefined;
+  if (!orientation?.lock || !document.fullscreenElement) return false;
+
+  try {
+    await orientation.lock(type);
+    return true;
+  } catch (err) {
+    console.warn(`Failed to lock ${type} orientation:`, err);
+    return false;
+  }
+}
+
 /**
  * Meditation timer component with preset durations and countdown functionality
  * Features animated number display using SlidingNumber component
@@ -51,7 +82,13 @@ export function MeditationTimer() {
   const [flashCount, setFlashCount] = useState<number>(0);
   const [flashIntensity, setFlashIntensity] = useState<number>(0);
   const [targetTimestamp, setTargetTimestamp] = useState<number | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [fullscreenMode, setFullscreenMode] = useState<FullscreenMode>('off');
+  const isFullscreen = fullscreenMode !== 'off';
+  // On touch devices fullscreen is landscape by default, like YouTube video
+  const [fullscreenOrientation, setFullscreenOrientation] = useState<Orientation>('landscape');
+  // True when the browser locked the screen itself, so the layout must not rotate
+  const [orientationLocked, setOrientationLocked] = useState<boolean>(false);
+  const [isTouch, setIsTouch] = useState<boolean>(false);
   const noSleepRef = useRef<NoSleep | null>(null);
   const [noSleepEnabled, setNoSleepEnabled] = useState<boolean>(false);
 
@@ -68,6 +105,7 @@ export function MeditationTimer() {
   // Prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true);
+    setIsTouch(window.matchMedia('(pointer: coarse)').matches);
     // Initialize audio on mount
     if (typeof window !== 'undefined') {
       audioRef.current = new Audio('/bowl.mp3');
@@ -223,27 +261,59 @@ export function MeditationTimer() {
 
   /**
    * Toggle fullscreen mode
+   * On touch devices entering fullscreen also turns the timer to landscape:
+   * a real screen lock where the browser allows it, a rotated layout otherwise
    */
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      }).catch((err) => {
-        console.warn('Failed to enter fullscreen:', err);
-      });
-    } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      });
+  const toggleFullscreen = useCallback(async () => {
+    if (fullscreenMode !== 'off') {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch((err) => {
+          console.warn('Failed to exit fullscreen:', err);
+        });
+      }
+      // The browser releases the orientation lock together with fullscreen
+      setFullscreenMode('off');
+      setOrientationLocked(false);
+      return;
     }
-  }, []);
+
+    let nextMode: FullscreenMode = isTouch ? 'emulated' : 'off';
+    if (document.fullscreenEnabled) {
+      try {
+        await document.documentElement.requestFullscreen();
+        nextMode = 'native';
+      } catch (err) {
+        console.warn('Failed to enter fullscreen:', err);
+      }
+    }
+    if (nextMode === 'off') return;
+
+    // Lock before switching state: while the lock is pending the viewport is
+    // still portrait, and CSS rotation would flash for a moment
+    const locked = isTouch && (await lockOrientation('landscape'));
+    setFullscreenOrientation('landscape');
+    setOrientationLocked(locked);
+    setFullscreenMode(nextMode);
+  }, [fullscreenMode, isTouch]);
 
   /**
-   * Track fullscreen state changes
+   * Switch fullscreen orientation between landscape and portrait
+   */
+  const toggleOrientation = useCallback(async () => {
+    const next: Orientation = fullscreenOrientation === 'landscape' ? 'portrait' : 'landscape';
+    const locked = await lockOrientation(next);
+    setFullscreenOrientation(next);
+    setOrientationLocked(locked);
+  }, [fullscreenOrientation]);
+
+  /**
+   * Track fullscreen exits made outside the button (Esc, system back gesture)
    */
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      if (document.fullscreenElement) return;
+      setFullscreenMode((prev) => (prev === 'native' ? 'off' : prev));
+      setOrientationLocked(false);
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -497,7 +567,13 @@ export function MeditationTimer() {
 
   return (
     <div
-      className='relative flex min-h-screen flex-col items-center justify-center gap-8 bg-black p-4'
+      className='timer-root relative flex min-h-screen flex-col items-center justify-center gap-8 bg-black p-4'
+      // Rotated layout (globals.css) where the browser could not lock the screen
+      data-rotate={
+        isTouch && isFullscreen && fullscreenOrientation === 'landscape' && !orientationLocked
+          ? 'landscape'
+          : undefined
+      }
       onClick={enableNoSleepOnClick}
     >
       {/* Fullscreen flash overlay */}
@@ -510,10 +586,29 @@ export function MeditationTimer() {
         />
       )}
 
+      {/* Corner controls */}
+      <div className='timer-corner fixed top-4 right-4 z-10 flex items-center gap-5'>
+      {/* Orientation button - touch devices in fullscreen only */}
+      {isTouch && isFullscreen && (
+        <button
+          onClick={toggleOrientation}
+          className='text-zinc-600 hover:text-zinc-400 transition-colors'
+          aria-label={
+            fullscreenOrientation === 'landscape' ? 'Switch to portrait' : 'Switch to landscape'
+          }
+        >
+          {/* Shows the orientation the button switches to */}
+          <Smartphone
+            size={22}
+            className={`transition-transform ${fullscreenOrientation === 'portrait' ? 'rotate-90' : ''}`}
+          />
+        </button>
+      )}
+
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className='fixed top-4 right-4 z-10 text-zinc-600 hover:text-zinc-400 transition-colors'
+        className='text-zinc-600 hover:text-zinc-400 transition-colors'
         aria-label='Toggle fullscreen'
       >
         <svg
@@ -543,6 +638,7 @@ export function MeditationTimer() {
           )}
         </svg>
       </button>
+      </div>
 
       {/* Mode selector */}
       <div className='flex gap-6 relative z-10'>
@@ -586,7 +682,8 @@ export function MeditationTimer() {
       {/* Timer display */}
       <div className={`flex flex-col items-center relative z-10 ${mode === 'clock' ? 'w-full' : ''}`}>
         <div
-          className={`flex items-center justify-center gap-1 leading-none relative p-4 sm:p-8 ${
+          data-mode={mode}
+          className={`timer-digits flex items-center justify-center gap-1 leading-none relative p-4 sm:p-8 ${
             mode === 'clock'
               ? 'text-7xl sm:text-8xl md:text-9xl lg:text-[12rem] xl:text-[16rem]'
               : 'text-8xl'
