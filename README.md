@@ -25,7 +25,7 @@ A minimalist meditation timer and clock web application with smooth animations a
   - 💾 Automatic state persistence (survives page reload)
   - 📱 Screen wake-lock (prevents screen from sleeping)
   - 🖥️ Fullscreen mode support
-  - 📲 PWA-ready with app manifest
+  - 📲 Installable as an app with offline support
 
 - **Design**
   - Pure black background
@@ -85,6 +85,11 @@ npm start
 4. Use "pause" to pause the timer
 5. Use "reset" to reset to selected preset
 6. On completion: screen flashes red 10 times
+
+### Offline use
+- Open the site or installed app online once and wait for it to finish loading. It stores a complete copy of the timer, including its sound.
+- Later launches and countdowns work without a connection. Open it online again to receive updates.
+- Browsers may suspend a timer or its sound when the app is in the background or the screen is locked.
 
 ### Fullscreen
 - Click the fullscreen button (top-right corner) to toggle fullscreen mode

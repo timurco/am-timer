@@ -3,6 +3,7 @@ import { Manrope } from "next/font/google";
 import "./globals.css";
 import { INSTALL_SCRIPT } from "@/lib/install";
 import { InstallOffer } from "@/components/install-offer";
+import { Offline } from "@/components/offline";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -47,6 +48,7 @@ export default function RootLayout({
       <body className={`${manrope.variable} antialiased`}>
         {children}
         <InstallOffer />
+        <Offline />
       </body>
     </html>
   );
